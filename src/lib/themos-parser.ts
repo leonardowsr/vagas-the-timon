@@ -251,10 +251,31 @@ export function parseWordPressPost(post: any): Job | null {
   const dateObj = new Date(post.date);
   const now = new Date();
 
-  const deadlineMatch = rawInstructions.match(/at[ée]\s*(?:o\s*dia\s*)?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
-  if (deadlineMatch) {
-    deadline = deadlineMatch[1];
-    const parts = deadline.split('/');
+  // Month dictionary for textual deadlines (ex: "até 15 de novembro")
+  const MONTHS_MAP: Record<string, number> = {
+    janeiro: 0,
+    fevereiro: 1,
+    março: 2,
+    marco: 2,
+    abril: 3,
+    maio: 4,
+    junho: 5,
+    julho: 6,
+    agosto: 7,
+    setembro: 8,
+    outubro: 9,
+    novembro: 10,
+    dezembro: 11,
+  };
+
+  // Match DD/MM or DD/MM/YYYY
+  const deadlineMatchNumeric = rawInstructions.match(/at[ée]\s*(?:o\s*dia\s*)?(\d{1,2}\s*(?:\/|-|\.)\s*\d{1,2}(?:\s*(?:\/|-|\.)\s*\d{2,4})?)/i);
+  // Match textual dates: "até 15 de novembro"
+  const deadlineMatchTextual = rawInstructions.match(/at[ée]\s*(?:o\s*dia\s*)?(\d{1,2})\s+de\s+([a-zç]+)/i);
+
+  if (deadlineMatchNumeric) {
+    deadline = deadlineMatchNumeric[1].replace(/\s+/g, '');
+    const parts = deadline.split(/[/.-]/);
     if (parts.length >= 2) {
       const day = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1; // 0-indexed
@@ -267,7 +288,28 @@ export function parseWordPressPost(post: any): Job | null {
       const deadlineObj = new Date(year, month, day, 23, 59, 59, 999);
       deadlineDateIso = deadlineObj.toISOString();
 
-      // Check if deadline is before today
+      // Check if deadline has strictly passed
+      if (deadlineObj.getTime() < now.getTime()) {
+        isExpired = true;
+        jobStatus = 'expirada';
+      } else {
+        const msPerDay = 1000 * 60 * 60 * 24;
+        daysRemaining = Math.max(0, Math.ceil((deadlineObj.getTime() - now.getTime()) / msPerDay));
+        if (daysRemaining <= 2) {
+          jobStatus = 'ultimos_dias';
+        }
+      }
+    }
+  } else if (deadlineMatchTextual) {
+    const day = parseInt(deadlineMatchTextual[1], 10);
+    const monthName = deadlineMatchTextual[2].toLowerCase();
+    if (MONTHS_MAP[monthName] !== undefined) {
+      const month = MONTHS_MAP[monthName];
+      const year = dateObj.getFullYear();
+      const deadlineObj = new Date(year, month, day, 23, 59, 59, 999);
+      deadline = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
+      deadlineDateIso = deadlineObj.toISOString();
+
       if (deadlineObj.getTime() < now.getTime()) {
         isExpired = true;
         jobStatus = 'expirada';
@@ -280,9 +322,9 @@ export function parseWordPressPost(post: any): Job | null {
       }
     }
   } else {
-    // If no explicit deadline, expired if published more than 25 days ago
+    // If no explicit deadline, expire after 18 days from publication date
     const ageDays = (now.getTime() - dateObj.getTime()) / (1000 * 60 * 60 * 24);
-    if (ageDays > 25) {
+    if (ageDays > 18) {
       isExpired = true;
       jobStatus = 'expirada';
     }

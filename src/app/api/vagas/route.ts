@@ -35,17 +35,23 @@ async function getAllActiveJobs(forceRefresh = false): Promise<JobsResponse> {
     return cachedResponse.data;
   }
 
-  // Fetch first 3 pages (up to 150 latest posts) concurrently
-  const [page1, page2, page3] = await Promise.all([
+  // Fetch first 6 pages (up to 300 latest posts) concurrently
+  const [page1, page2, page3, page4, page5, page6] = await Promise.all([
     fetchPage(1),
     fetchPage(2),
     fetchPage(3),
+    fetchPage(4),
+    fetchPage(5),
+    fetchPage(6),
   ]);
 
   const rawPosts = [
     ...(Array.isArray(page1) ? page1 : []),
     ...(Array.isArray(page2) ? page2 : []),
     ...(Array.isArray(page3) ? page3 : []),
+    ...(Array.isArray(page4) ? page4 : []),
+    ...(Array.isArray(page5) ? page5 : []),
+    ...(Array.isArray(page6) ? page6 : []),
   ];
 
   const allJobs: Job[] = [];
