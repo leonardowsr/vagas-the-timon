@@ -10,6 +10,10 @@ export interface ApplicationInfo {
   whatsappMessage?: string;
   link?: string;
   deadline?: string;
+  deadlineDate?: string;
+  isExpired: boolean;
+  daysRemaining: number | null;
+  status: 'aberta' | 'ultimos_dias' | 'expirada';
   rawInstructions: string;
 }
 
@@ -34,6 +38,7 @@ export interface Job {
   publishedAt: string;
   publishedAtFormatted: string;
   isToday: boolean;
+  isExpired: boolean;
 }
 
 export interface JobsResponse {
@@ -47,6 +52,7 @@ export interface JobsResponse {
     clt: number;
     homeOffice: number;
     jovemAprendiz: number;
+    expiradasFiltradas: number;
   };
   lastUpdated: string;
 }

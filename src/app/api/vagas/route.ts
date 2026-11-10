@@ -4,7 +4,7 @@ import { Job, JobsResponse } from '@/types/job';
 
 // Cache memory in-process for fallback
 let cachedResponse: { timestamp: number; data: JobsResponse } | null = null;
-const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
 async function fetchPage(page: number): Promise<any[]> {
   try {
@@ -12,7 +12,7 @@ async function fetchPage(page: number): Promise<any[]> {
       `https://themosvagas.com.br/wp-json/wp/v2/posts?per_page=50&page=${page}&_fields=id,date,slug,link,title,content`,
       {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (VagasTHE/1.0; Automacao Teresina-Timon)',
+          'User-Agent': 'Mozilla/5.0 (VagasTHE/2.0; Automacao Teresina-Timon)',
           'Accept': 'application/json',
         },
         cache: 'no-store',
@@ -35,36 +35,50 @@ async function getAllActiveJobs(forceRefresh = false): Promise<JobsResponse> {
     return cachedResponse.data;
   }
 
-  // Fetch first 2 pages (up to 200 latest posts from Themos Vagas)
-  const [page1, page2] = await Promise.all([
+  // Fetch first 3 pages (up to 150 latest posts) concurrently
+  const [page1, page2, page3] = await Promise.all([
     fetchPage(1),
     fetchPage(2),
+    fetchPage(3),
   ]);
 
-  const rawPosts = [...(Array.isArray(page1) ? page1 : []), ...(Array.isArray(page2) ? page2 : [])];
+  const rawPosts = [
+    ...(Array.isArray(page1) ? page1 : []),
+    ...(Array.isArray(page2) ? page2 : []),
+    ...(Array.isArray(page3) ? page3 : []),
+  ];
 
-  const jobs: Job[] = [];
+  const allJobs: Job[] = [];
+  let expiredCount = 0;
+
   for (const post of rawPosts) {
     const parsed = parseWordPressPost(post);
     if (parsed) {
-      jobs.push(parsed);
+      if (parsed.isExpired) {
+        expiredCount++;
+      }
+      allJobs.push(parsed);
     }
   }
 
-  // Calculate statistics
+  // Non-expired jobs (always active)
+  const activeJobs = allJobs.filter((j) => !j.isExpired);
+
+  // Calculate statistics only for active valid jobs
   const stats = {
-    total: jobs.length,
-    teresina: jobs.filter((j) => j.city.includes('Teresina')).length,
-    timon: jobs.filter((j) => j.city.includes('Timon')).length,
-    estagios: jobs.filter((j) => j.jobType === 'Estágio').length,
-    clt: jobs.filter((j) => j.jobType === 'CLT').length,
-    homeOffice: jobs.filter((j) => j.jobType === 'Home Office').length,
-    jovemAprendiz: jobs.filter((j) => j.jobType === 'Jovem Aprendiz').length,
+    total: activeJobs.length,
+    teresina: activeJobs.filter((j) => j.city.includes('Teresina')).length,
+    timon: activeJobs.filter((j) => j.city.includes('Timon')).length,
+    estagios: activeJobs.filter((j) => j.jobType === 'Estágio').length,
+    clt: activeJobs.filter((j) => j.jobType === 'CLT').length,
+    homeOffice: activeJobs.filter((j) => j.jobType === 'Home Office').length,
+    jovemAprendiz: activeJobs.filter((j) => j.jobType === 'Jovem Aprendiz').length,
+    expiradasFiltradas: expiredCount,
   };
 
   const responseData: JobsResponse = {
-    jobs,
-    total: jobs.length,
+    jobs: allJobs,
+    total: activeJobs.length,
     stats,
     lastUpdated: new Date().toISOString(),
   };
@@ -81,6 +95,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const forceRefresh = searchParams.get('refresh') === '1' || searchParams.get('refresh') === 'true';
+    const includeExpired = searchParams.get('includeExpired') === 'true';
     const q = searchParams.get('q')?.toLowerCase().trim() || '';
     const city = searchParams.get('city') || '';
     const type = searchParams.get('type') || '';
@@ -89,7 +104,10 @@ export async function GET(request: NextRequest) {
 
     const fullData = await getAllActiveJobs(forceRefresh);
 
-    let filteredJobs = fullData.jobs;
+    // By default, strictly filter out expired jobs so the user only sees valid positions
+    let filteredJobs = includeExpired
+      ? fullData.jobs
+      : fullData.jobs.filter((j) => !j.isExpired);
 
     if (city && city !== 'all') {
       filteredJobs = filteredJobs.filter((job) => job.city.toLowerCase().includes(city.toLowerCase()));

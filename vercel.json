@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/vagas?refresh=1",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

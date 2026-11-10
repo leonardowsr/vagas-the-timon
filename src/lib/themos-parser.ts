@@ -216,11 +216,51 @@ export function parseWordPressPost(post: any): Job | null {
     }
   }
 
-  // Application Deadline (e.g., "até 11/11/2026")
+  // Application Deadline & Expiration logic
   let deadline: string | undefined = undefined;
+  let deadlineDateIso: string | undefined = undefined;
+  let isExpired = false;
+  let daysRemaining: number | null = null;
+  let jobStatus: 'aberta' | 'ultimos_dias' | 'expirada' = 'aberta';
+
+  const dateObj = new Date(post.date);
+  const now = new Date();
+
   const deadlineMatch = rawInstructions.match(/at[ée]\s*(?:o\s*dia\s*)?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
   if (deadlineMatch) {
     deadline = deadlineMatch[1];
+    const parts = deadline.split('/');
+    if (parts.length >= 2) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // 0-indexed
+      let year = dateObj.getFullYear();
+      if (parts.length === 3) {
+        let y = parseInt(parts[2], 10);
+        if (y < 100) y += 2000;
+        year = y;
+      }
+      const deadlineObj = new Date(year, month, day, 23, 59, 59, 999);
+      deadlineDateIso = deadlineObj.toISOString();
+
+      // Check if deadline is before today
+      if (deadlineObj.getTime() < now.getTime()) {
+        isExpired = true;
+        jobStatus = 'expirada';
+      } else {
+        const msPerDay = 1000 * 60 * 60 * 24;
+        daysRemaining = Math.max(0, Math.ceil((deadlineObj.getTime() - now.getTime()) / msPerDay));
+        if (daysRemaining <= 2) {
+          jobStatus = 'ultimos_dias';
+        }
+      }
+    }
+  } else {
+    // If no explicit deadline, expired if published more than 25 days ago
+    const ageDays = (now.getTime() - dateObj.getTime()) / (1000 * 60 * 60 * 24);
+    if (ageDays > 25) {
+      isExpired = true;
+      jobStatus = 'expirada';
+    }
   }
 
   // Decide channel priority
@@ -236,10 +276,7 @@ export function parseWordPressPost(post: any): Job | null {
   const whatsappMessage = `Olá! Vi a oportunidade para ${role} em ${city} e gostaria de enviar meu currículo e informações.`;
 
   // Published Date formatting
-  const dateObj = new Date(post.date);
-  const now = new Date();
   const isToday = dateObj.toDateString() === now.toDateString();
-
   const timeFormatted = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const dateFormatted = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
@@ -272,11 +309,16 @@ export function parseWordPressPost(post: any): Job | null {
       whatsappMessage,
       link: externalLink,
       deadline,
+      deadlineDate: deadlineDateIso,
+      isExpired,
+      daysRemaining,
+      status: jobStatus,
       rawInstructions: rawInstructions.slice(0, 400),
     },
     originalUrl: post.link,
     publishedAt: post.date,
     publishedAtFormatted,
     isToday,
+    isExpired,
   };
 }

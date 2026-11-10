@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   description: "Automação inteligente e agregador de vagas de emprego e estágio exclusivo para Teresina (PI) e Timon (MA). Informações organizadas e candidatura em 1 clique.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="en"
