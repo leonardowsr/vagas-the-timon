@@ -52,33 +52,58 @@ function parseListItems(text: string | null): string[] {
 }
 
 // Infer Job Category
+// Infer Job Category strictly by role and title first
 function inferArea(title: string, role: string, content: string): string {
-  const text = `${title} ${role} ${content}`.toLowerCase();
-  
-  if (/programador|desenvolvedor|ti\b|tecnologia|inform[aá]tica|sistemas|software|redes|suporte t\.?i/i.test(text)) {
+  const r = `${role} ${title}`.toLowerCase();
+  const full = `${r} ${content}`.toLowerCase();
+
+  // 1. TI & Tecnologia
+  if (/\b(ti|t\.i|tecnologia|programador|desenvolvedor|inform[aá]tica|software|redes|sistemas|suporte t\.?i|dados|dev|fullstack|frontend|backend)\b/i.test(r)) {
     return 'TI & Tecnologia';
   }
-  if (/vendas|vendedor|comercial|consultor\(?a\)? de vendas|promotor|representante comercial|rca/i.test(text)) {
-    return 'Vendas & Comercial';
-  }
-  if (/telemarketing|cobran[cç]a|atendente|atendimento|recepcionista|recep[cç][aã]o|balconista|gar[cç]om|caixa\b/i.test(text)) {
+
+  // 2. Recepção e Atendimento (deve vir antes para capturar "recepcionista comercial" em Atendimento)
+  if (/\b(recepcionista|recep[cç][aã]o|atendente|atendimento|telemarketing|balconista|gar[cç]om|caixa|operador\(?a\)? de caixa|cobran[cç]a)\b/i.test(r)) {
     return 'Atendimento & Recepção';
   }
-  if (/financeir[oa]|cont[aá]bil|contabilidade|fiscal|faturamento|administrativ[oa]|administra[cç][aã]o|auxiliar adm|recursos humanos|\brh\b|dp\b|compras/i.test(text)) {
-    return 'Administrativo & Financeiro';
+
+  // 3. Supermercado, Varejo e Prevenção de Perdas (separado de Comercial)
+  if (/\b(supermercado|preven[cç][aã]o de perdas|fiscal de loja|fiscal de preven[cç][aã]o|repositor|empacotador|a[cç]ougue|padeiro|hortifruti|frente de loja|conferente de loja)\b/i.test(r)) {
+    return 'Varejo & Supermercado';
   }
-  if (/enferm|m[eé]dic|farm[aá]ci|sa[uú]de|veterin[aá]ri|fisioter|psic[oó]log|nutri/i.test(text)) {
+
+  // 4. Comercial & Vendas (Foco estrito em vagas comerciais: Vendedor, Assistente/Analista Comercial, SDR, Consultor de Vendas)
+  if (
+    /\b(comercial|vendas?|vendedor|vendedora|consultor\(?a\)? de vendas|consultor\(?a\)? comercial|assistente comercial|analista comercial|executiv[oa] de contas|prospec[cç][aã]o|inside sales|sdr|bdr|representante comercial|rca|televendas|promotor\(?a\)? de vendas|supervisor\(?a\)? comercial|gerente comercial|coordenador\(?a\)? comercial)\b/i.test(r)
+  ) {
+    return 'Comercial & Vendas';
+  }
+
+  // 5. Saúde & Cuidados
+  if (/\b(enferm|m[eé]dic|farm[aá]c|sa[uú]de|veterin[aá]r|fisioter|psic[oó]l|nutri|dentista|odont|hospital|cl[ií]nica)\b/i.test(r)) {
     return 'Saúde & Cuidados';
   }
-  if (/dep[oó]sito|estoque|log[ií]stic|motorista|entregador|repositor|produ[cç][aã]o|estiva|servente|auxiliar de servi[cç]os|operacional|limpeza/i.test(text)) {
+
+  // 6. Administrativo & Financeiro
+  if (/\b(financeir|cont[aá]bil|contabilidade|fiscal|faturamento|administrativ|administra[cç]|auxiliar adm|recursos humanos|\brh\b|\bdp\b|compras|sinistro|processos|controladoria)\b/i.test(r)) {
+    return 'Administrativo & Financeiro';
+  }
+
+  // 7. Logística & Operacional
+  if (/\b(dep[oó]sito|estoque|log[ií]stic|motorista|entregador|produ[cç][aã]o|estiva|servente|servi[cç]os gerais|limpeza|zelador|turma|operacional|manuten[cç][aã]o|auxiliar operacional)\b/i.test(r)) {
     return 'Logística & Operacional';
   }
-  if (/marketing|design|social media|comunica[cç][aã]o|publicidade/i.test(text)) {
+
+  // 8. Marketing & Criação
+  if (/\b(marketing|design|social media|comunica[cç][aã]o|publicidade|audiovisual|copywriter)\b/i.test(r)) {
     return 'Marketing & Criação';
   }
-  if (/professor|est[aá]gio pedagog|educa[cç][aã]o|monitor/i.test(text)) {
+
+  // 9. Educação
+  if (/\b(professor|pedagog|educa[cç][aã]o|monitor|letras|escola)\b/i.test(r)) {
     return 'Educação';
   }
+
   return 'Geral';
 }
 

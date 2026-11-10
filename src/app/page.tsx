@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   MapPin,
@@ -18,13 +18,23 @@ import {
   ChevronRight,
   X,
   Share2,
-  AlertCircle,
   Timer,
-  CheckCircle2,
-  ArrowUpRight,
   ShieldCheck,
 } from 'lucide-react';
 import { Job, JobsResponse } from '@/types/job';
+
+const AREAS = [
+  'all',
+  'Comercial & Vendas',
+  'Atendimento & Recepção',
+  'Administrativo & Financeiro',
+  'TI & Tecnologia',
+  'Varejo & Supermercado',
+  'Logística & Operacional',
+  'Saúde & Cuidados',
+  'Marketing & Criação',
+  'Educação',
+];
 
 export default function Home() {
   const [data, setData] = useState<JobsResponse | null>(null);
@@ -32,7 +42,6 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,7 +51,7 @@ export default function Home() {
   const [onlyWithSalary, setOnlyWithSalary] = useState(false);
   const [includeExpired, setIncludeExpired] = useState(false);
 
-  // Modal & Toast
+  // Modal state
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
@@ -65,7 +74,9 @@ export default function Home() {
 
       const json: JobsResponse = await res.json();
       setData(json);
-      setLastSyncTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setLastSyncTime(
+        new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      );
     } catch (err: any) {
       console.error(err);
       if (!silent) setError(err.message || 'Erro ao carregar vagas.');
@@ -75,19 +86,29 @@ export default function Home() {
     }
   };
 
-  // Initial load and reload when includeExpired changes
   useEffect(() => {
     loadJobs();
   }, [includeExpired]);
 
   // Background Auto-Sync every 60 seconds
   useEffect(() => {
-    if (!autoSyncEnabled) return;
     const interval = setInterval(() => {
-      loadJobs(true, true); // silent background refresh
+      loadJobs(true, true);
     }, 60000);
     return () => clearInterval(interval);
-  }, [autoSyncEnabled, includeExpired]);
+  }, [includeExpired]);
+
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    if (activeJob) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [activeJob]);
 
   // Filtered jobs
   const filteredJobs = useMemo(() => {
@@ -113,7 +134,9 @@ export default function Home() {
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const searchable = `${job.title} ${job.role} ${job.area} ${job.salary} ${job.schedule} ${job.requirements.join(' ')} ${job.activities.join(' ')}`.toLowerCase();
+        const searchable = `${job.title} ${job.role} ${job.area} ${job.salary} ${job.schedule} ${job.requirements.join(
+          ' '
+        )} ${job.activities.join(' ')}`.toLowerCase();
         if (!searchable.includes(q)) return false;
       }
 
@@ -134,45 +157,47 @@ export default function Home() {
   // Share job via WhatsApp
   const handleShare = (job: Job, e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = `Olha essa vaga de *${job.role}* em *${job.city}*:\nSalário: ${job.salary}\nConfira e envie seu currículo: https://vagas-the-timon.vercel.app/#vaga-${job.id}`;
+    const text = `Olha essa vaga de *${job.role}* em *${job.city}*:\nSalário: ${job.salary}\nConfira e candidate-se: https://vagas-the-timon.vercel.app/#vaga-${job.id}`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank');
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-500 selection:text-white pb-12">
       {/* Top Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/20 text-white font-black text-xl tracking-tighter">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-500/20 text-white font-black text-lg sm:text-xl tracking-tighter shrink-0">
               THE
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-slate-900 tracking-tight">Vagas THE & Timon</span>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-bold text-base sm:text-lg text-slate-900 tracking-tight truncate">
+                  Vagas THE & Timon
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Ao Vivo
                 </span>
               </div>
-              <p className="text-xs text-slate-500 hidden sm:block">
-                Oportunidades em Teresina (PI) e Timon (MA) • Apenas vagas válidas dentro do prazo
+              <p className="text-[11px] sm:text-xs text-slate-500 hidden sm:block truncate">
+                Teresina (PI) e Timon (MA) • Vagas reais atualizadas
               </p>
             </div>
           </div>
 
           {/* Sync Status & Action */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden lg:flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
               <Timer className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Sync automático a cada 60s {lastSyncTime && `(último: ${lastSyncTime})`}</span>
+              <span>Sync a cada 60s {lastSyncTime && `(${lastSyncTime})`}</span>
             </div>
 
             <button
               onClick={() => loadJobs(true)}
               disabled={refreshing}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50 shadow-xs"
               title="Sincronizar novas vagas agora"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -183,54 +208,54 @@ export default function Home() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Hero Section */}
-        <div className="text-center max-w-3xl mx-auto mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100/70 text-emerald-800 border border-emerald-200 mb-4">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            Filtro inteligente: vagas vencidas são descartadas automaticamente
+        <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-8">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-100/70 text-emerald-800 border border-emerald-200 mb-3 sm:mb-4">
+            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+            <span>Vagas vencidas são filtradas automaticamente</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight mb-4">
-            Vagas de Emprego em{' '}
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight mb-2 sm:mb-4 leading-tight">
+            Empregos em{' '}
             <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent">
               Teresina & Timon
             </span>
           </h1>
-          <p className="text-slate-600 text-base sm:text-lg mb-6">
-            Informações diretas, sem propagandas. Salários em destaque e candidatura rápida por WhatsApp ou E-mail com o assunto exigido pela empresa.
+          <p className="text-slate-600 text-xs sm:text-base mb-4 sm:mb-6 px-2">
+            Todas as informações diretas, sem propagandas. Candidatura com 1 clique por E-mail ou WhatsApp.
           </p>
 
           {/* Metrics */}
           {data?.stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto mb-8">
-              <div className="bg-white border border-slate-200 rounded-xl p-3 text-center shadow-xs">
-                <span className="block text-2xl font-black text-emerald-600">{data.stats.total}</span>
-                <span className="text-xs text-slate-500 font-medium">Vagas no Prazo</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 max-w-2xl mx-auto mb-5 sm:mb-8">
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 text-center shadow-xs">
+                <span className="block text-xl sm:text-2xl font-black text-emerald-600">{data.stats.total}</span>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">Vagas no Prazo</span>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl p-3 text-center shadow-xs">
-                <span className="block text-2xl font-black text-cyan-600">{data.stats.teresina}</span>
-                <span className="text-xs text-slate-500 font-medium">📍 Teresina (PI)</span>
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 text-center shadow-xs">
+                <span className="block text-xl sm:text-2xl font-black text-cyan-600">{data.stats.teresina}</span>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">📍 Teresina</span>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl p-3 text-center shadow-xs">
-                <span className="block text-2xl font-black text-amber-600">{data.stats.timon}</span>
-                <span className="text-xs text-slate-500 font-medium">📍 Timon (MA)</span>
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 text-center shadow-xs">
+                <span className="block text-xl sm:text-2xl font-black text-amber-600">{data.stats.timon}</span>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">📍 Timon</span>
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl p-3 text-center shadow-xs">
-                <span className="block text-2xl font-black text-indigo-600">{data.stats.estagios}</span>
-                <span className="text-xs text-slate-500 font-medium">🎓 Estágios</span>
+              <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 text-center shadow-xs">
+                <span className="block text-xl sm:text-2xl font-black text-indigo-600">{data.stats.estagios}</span>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">🎓 Estágios</span>
               </div>
             </div>
           )}
 
           {/* Search Box */}
-          <div className="relative max-w-2xl mx-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <div className="relative max-w-2xl mx-auto px-1 sm:px-0">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 sm:w-5 h-4 sm:h-5 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar cargo, área, habilidades, benefícios (ex: Vendas, TI, Estágio)..."
-              className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-white border border-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/10 text-slate-900 placeholder-slate-400 text-sm sm:text-base outline-none transition-all shadow-sm"
+              placeholder="Buscar cargo, área, requisitos (ex: Vendedor, TI, Estágio)..."
+              className="w-full pl-10 sm:pl-12 pr-9 sm:pr-10 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white border border-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-500/10 text-slate-900 placeholder-slate-400 text-sm sm:text-base outline-none transition-all shadow-xs"
             />
             {searchQuery && (
               <button
@@ -244,13 +269,13 @@ export default function Home() {
         </div>
 
         {/* Filters Box */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 shadow-xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-6 shadow-xs space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             {/* City Tabs */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs sm:text-sm">
+            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs w-full sm:w-auto">
               <button
                 onClick={() => setSelectedCity('all')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-medium transition-all ${
                   selectedCity === 'all'
                     ? 'bg-emerald-600 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -260,7 +285,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setSelectedCity('Teresina')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-medium transition-all ${
                   selectedCity === 'Teresina'
                     ? 'bg-emerald-600 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -270,7 +295,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setSelectedCity('Timon')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-medium transition-all ${
                   selectedCity === 'Timon'
                     ? 'bg-emerald-600 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -281,38 +306,38 @@ export default function Home() {
             </div>
 
             {/* Checkbox Options */}
-            <div className="flex items-center gap-4 flex-wrap">
-              <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-slate-700 select-none">
+            <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-xs sm:text-sm">
+              <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 select-none">
                 <input
                   type="checkbox"
                   checked={onlyWithSalary}
                   onChange={(e) => setOnlyWithSalary(e.target.checked)}
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 accent-emerald-600"
                 />
-                <span>Com salário informado 💰</span>
+                <span>Com salário 💰</span>
               </label>
 
               {data?.stats.expiradasFiltradas ? (
-                <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-slate-500 hover:text-slate-700 select-none">
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-500 hover:text-slate-700 select-none">
                   <input
                     type="checkbox"
                     checked={includeExpired}
                     onChange={(e) => setIncludeExpired(e.target.checked)}
                     className="rounded border-slate-300 text-slate-600 focus:ring-slate-400 w-4 h-4"
                   />
-                  <span>Mostrar {data.stats.expiradasFiltradas} vagas expiradas</span>
+                  <span>Ver {data.stats.expiradasFiltradas} expiradas</span>
                 </label>
               ) : null}
             </div>
           </div>
 
           {/* Type Badges */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 overflow-x-auto no-scrollbar pb-1">
             {['all', 'CLT', 'Estágio', 'Home Office', 'Jovem Aprendiz', 'Diarista'].map((typeKey) => (
               <button
                 key={typeKey}
                 onClick={() => setSelectedType(typeKey)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap shrink-0 transition-all ${
                   selectedType === typeKey
                     ? 'bg-slate-900 text-white font-semibold'
                     : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
@@ -323,37 +348,36 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Area Badges */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {[
-              'all',
-              'Vendas & Comercial',
-              'Administrativo & Financeiro',
-              'TI & Tecnologia',
-              'Atendimento & Recepção',
-              'Logística & Operacional',
-              'Saúde & Cuidados',
-              'Marketing & Criação',
-            ].map((areaKey) => (
-              <button
-                key={areaKey}
-                onClick={() => setSelectedArea(areaKey)}
-                className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                  selectedArea === areaKey
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:text-slate-900'
-                }`}
-              >
-                {areaKey === 'all' ? 'Todas as áreas' : areaKey}
-              </button>
-            ))}
+          {/* Area Badges (Strict: Comercial & Vendas separada!) */}
+          <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar pb-1">
+            {AREAS.map((areaKey) => {
+              const isSelected = selectedArea === areaKey;
+              const isComercial = areaKey === 'Comercial & Vendas';
+
+              return (
+                <button
+                  key={areaKey}
+                  onClick={() => setSelectedArea(areaKey)}
+                  className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap shrink-0 transition-all ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                      : isComercial
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 font-semibold'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:text-slate-900'
+                  }`}
+                >
+                  {isComercial && '🎯 '}
+                  {areaKey === 'all' ? 'Todas as áreas' : areaKey}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Results Info */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-slate-600">
-            Exibindo <span className="text-slate-900 font-bold">{filteredJobs.length}</span> vagas ativas e dentro do prazo
+        <div className="flex items-center justify-between mb-3 sm:mb-4 px-1">
+          <p className="text-xs sm:text-sm text-slate-600">
+            Exibindo <span className="text-slate-900 font-bold">{filteredJobs.length}</span> vagas ativas
           </p>
           {(searchQuery || selectedCity !== 'all' || selectedType !== 'all' || selectedArea !== 'all' || onlyWithSalary || includeExpired) && (
             <button
@@ -374,20 +398,20 @@ export default function Home() {
 
         {/* Loading */}
         {loading && (
-          <div className="py-20 text-center">
-            <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-4" />
-            <p className="text-slate-600 text-sm font-medium">Buscando e filtrando vagas ativas de Teresina e Timon...</p>
+          <div className="py-16 text-center">
+            <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
+            <p className="text-slate-600 text-sm font-medium">Buscando e filtrando vagas de Teresina e Timon...</p>
           </div>
         )}
 
         {/* Error */}
         {error && !loading && (
-          <div className="p-6 rounded-2xl bg-rose-50 border border-rose-200 text-center text-rose-800">
-            <p className="font-semibold mb-2">Ops! Ocorreu um problema ao sincronizar as vagas.</p>
-            <p className="text-xs text-rose-600 mb-4">{error}</p>
+          <div className="p-4 sm:p-6 rounded-2xl bg-rose-50 border border-rose-200 text-center text-rose-800">
+            <p className="font-semibold text-sm mb-1">Ops! Ocorreu um problema ao sincronizar as vagas.</p>
+            <p className="text-xs text-rose-600 mb-3">{error}</p>
             <button
               onClick={() => loadJobs(true)}
-              className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-all"
+              className="px-4 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-all"
             >
               Tentar novamente
             </button>
@@ -396,11 +420,11 @@ export default function Home() {
 
         {/* Empty State */}
         {!loading && !error && filteredJobs.length === 0 && (
-          <div className="py-16 text-center bg-white rounded-2xl border border-slate-200 shadow-xs">
-            <Briefcase className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Nenhuma vaga ativa encontrada</h3>
-            <p className="text-slate-500 text-sm max-w-md mx-auto mb-4">
-              Tente remover alguns filtros ou busque por termos mais genéricos.
+          <div className="py-12 sm:py-16 text-center bg-white rounded-2xl border border-slate-200 shadow-xs px-4">
+            <Briefcase className="w-10 sm:w-12 h-10 sm:h-12 text-slate-400 mx-auto mb-3" />
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">Nenhuma vaga encontrada</h3>
+            <p className="text-slate-500 text-xs sm:text-sm max-w-md mx-auto mb-4">
+              Tente remover alguns filtros ou selecionar outra categoria.
             </p>
             <button
               onClick={() => {
@@ -410,15 +434,15 @@ export default function Home() {
                 setSelectedArea('all');
                 setOnlyWithSalary(false);
               }}
-              className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-all shadow-sm"
+              className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-all shadow-xs"
             >
               Ver todas as vagas
             </button>
           </div>
         )}
 
-        {/* Jobs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Jobs Grid (Responsive: 1 col on mobile, 2 on tablet, 3 on desktop) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredJobs.map((job) => {
             const isEmail = job.application.channel === 'email';
             const isWhats = job.application.channel === 'whatsapp';
@@ -430,7 +454,7 @@ export default function Home() {
                 key={job.id}
                 id={`vaga-${job.id}`}
                 onClick={() => setActiveJob(job)}
-                className={`group relative bg-white hover:bg-slate-50/80 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md cursor-pointer ${
+                className={`group relative bg-white hover:bg-slate-50/80 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md cursor-pointer ${
                   job.isExpired
                     ? 'border-slate-300 opacity-60'
                     : isEndingSoon
@@ -440,31 +464,31 @@ export default function Home() {
               >
                 <div>
                   {/* Top Badges */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center justify-between gap-1.5 mb-2.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-bold ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
                           job.city.includes('Timon')
                             ? 'bg-amber-50 text-amber-800 border border-amber-200'
                             : 'bg-cyan-50 text-cyan-800 border border-cyan-200'
                         }`}
                       >
-                        <MapPin className="w-3 h-3" />
+                        <MapPin className="w-3 h-3 shrink-0" />
                         {job.city} – {job.state}
                       </span>
-                      <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
                         {job.jobType}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       {isEndingSoon && !job.isExpired && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                           <Clock className="w-2.5 h-2.5" /> Últimos dias
                         </span>
                       )}
                       {job.isToday && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           <Sparkles className="w-2.5 h-2.5" /> Hoje
                         </span>
                       )}
@@ -472,25 +496,25 @@ export default function Home() {
                   </div>
 
                   {/* Role Title */}
-                  <h2 className="text-lg font-bold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-2 mb-2 leading-snug">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-2 mb-1.5 leading-snug">
                     {job.role}
                   </h2>
 
                   {/* Category Pill */}
                   <div className="text-xs text-slate-500 font-medium mb-3 flex items-center gap-1.5">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-400" />
-                    {job.area}
+                    <span className="truncate">{job.area}</span>
                     {job.openings > 1 && (
-                      <span className="text-slate-600 ml-auto font-semibold">
+                      <span className="text-slate-600 ml-auto font-semibold shrink-0">
                         {job.openings} vagas
                       </span>
                     )}
                   </div>
 
                   {/* Salary Box */}
-                  <div className="mb-4">
+                  <div className="mb-3.5">
                     <div
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs sm:text-sm font-bold ${
                         job.hasSalaryInfo
                           ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                           : 'bg-slate-100 text-slate-600 border border-slate-200'
@@ -502,15 +526,17 @@ export default function Home() {
                   </div>
 
                   {/* Details (Schedule & Deadline) */}
-                  <div className="space-y-1.5 mb-5 text-xs text-slate-600">
+                  <div className="space-y-1 mb-4 text-xs text-slate-600">
                     {job.application.deadline && (
-                      <div className="flex items-center gap-2 text-slate-700 font-medium">
+                      <div className="flex items-center gap-1.5 text-slate-700 font-medium">
                         <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                        <span>Inscrições até: <strong className="text-slate-900">{job.application.deadline}</strong></span>
+                        <span className="truncate">
+                          Inscrições até: <strong className="text-slate-900">{job.application.deadline}</strong>
+                        </span>
                       </div>
                     )}
                     {job.schedule && (
-                      <div className="flex items-center gap-2 text-slate-500">
+                      <div className="flex items-center gap-1.5 text-slate-500">
                         <Clock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                         <span className="truncate">{job.schedule}</span>
                       </div>
@@ -518,8 +544,8 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Bottom Action Strip */}
-                <div className="pt-4 border-t border-slate-100 flex items-center gap-2">
+                {/* Bottom Action Strip (Responsive for Mobile touch) */}
+                <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5">
                   {/* Primary Action Button */}
                   {isEmail && job.application.email && (
                     <a
@@ -529,10 +555,10 @@ export default function Home() {
                         `Olá,\n\nSegue em anexo meu currículo para a oportunidade de ${job.role}.\n\nAtenciosamente.`
                       )}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-98"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-98 min-h-[38px]"
                     >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Enviar Currículo</span>
+                      <Send className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">Enviar Currículo</span>
                     </a>
                   )}
 
@@ -544,10 +570,10 @@ export default function Home() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-green-600 hover:bg-green-700 text-white transition-all shadow-xs active:scale-98"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-green-600 hover:bg-green-700 text-white transition-all shadow-xs active:scale-98 min-h-[38px]"
                     >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      <span>Chamar no WhatsApp</span>
+                      <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">WhatsApp</span>
                     </a>
                   )}
 
@@ -557,10 +583,10 @@ export default function Home() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white transition-all shadow-xs active:scale-98"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white transition-all shadow-xs active:scale-98 min-h-[38px]"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Acessar Inscrição</span>
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">Inscrição</span>
                     </a>
                   )}
 
@@ -569,7 +595,7 @@ export default function Home() {
                     <button
                       onClick={(e) => handleCopyEmail(job, e)}
                       title="Copiar endereço de e-mail"
-                      className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 transition-all border border-slate-200"
+                      className="p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 transition-all border border-slate-200 min-h-[38px] min-w-[38px] flex items-center justify-center"
                     >
                       {copiedId === job.id ? (
                         <Check className="w-4 h-4 text-emerald-600" />
@@ -583,7 +609,7 @@ export default function Home() {
                   <button
                     onClick={(e) => handleShare(job, e)}
                     title="Compartilhar vaga no WhatsApp"
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 transition-all border border-slate-200"
+                    className="p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 transition-all border border-slate-200 min-h-[38px] min-w-[38px] flex items-center justify-center"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -594,19 +620,22 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Detail Modal */}
+      {/* Detail Modal (100% Mobile Friendly: Bottom sheet style on small screens) */}
       {activeJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-150">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setActiveJob(null)}
+        >
           <div
-            className="relative w-full max-w-2xl max-h-[90vh] bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            className="relative w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] bg-white border-t sm:border border-slate-200 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200 sm:slide-in-from-bottom-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap text-xs">
                   <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-bold ${
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold ${
                       activeJob.city.includes('Timon')
                         ? 'bg-amber-50 text-amber-800 border border-amber-200'
                         : 'bg-cyan-50 text-cyan-800 border border-cyan-200'
@@ -615,45 +644,47 @@ export default function Home() {
                     <MapPin className="w-3 h-3" />
                     {activeJob.city} – {activeJob.state}
                   </span>
-                  <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                  <span className="px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-700">
                     {activeJob.jobType}
                   </span>
-                  <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600">
+                  <span className="px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-600">
                     {activeJob.area}
                   </span>
-                  <span className="text-xs text-slate-400 ml-1">
+                  <span className="text-slate-400 text-[11px]">
                     {activeJob.publishedAtFormatted}
                   </span>
                 </div>
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900">{activeJob.role}</h3>
+                <h3 className="text-lg sm:text-2xl font-black text-slate-900 leading-snug">
+                  {activeJob.role}
+                </h3>
               </div>
 
               <button
                 onClick={() => setActiveJob(null)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-all"
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-all shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-sm">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 text-sm">
               {/* Highlights Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-xs text-slate-500 block mb-1">Salário</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block mb-0.5">Salário</span>
                   <span className="font-bold text-emerald-700 text-sm sm:text-base">
                     {activeJob.salary}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-xs text-slate-500 block mb-1">Vagas</span>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block mb-0.5">Vagas</span>
                   <span className="font-bold text-slate-900 text-sm sm:text-base">
                     {activeJob.openings} vaga(s)
                   </span>
                 </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 col-span-2 sm:col-span-1">
-                  <span className="text-xs text-slate-500 block mb-1">Horário / Escala</span>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 col-span-2 sm:col-span-1">
+                  <span className="text-[11px] text-slate-500 block mb-0.5">Horário / Escala</span>
                   <span className="font-medium text-slate-800 text-xs sm:text-sm">
                     {activeJob.schedule || 'A combinar'}
                   </span>
@@ -668,7 +699,7 @@ export default function Home() {
                   </h4>
                   <ul className="space-y-1.5">
                     {activeJob.requirements.map((req, i) => (
-                      <li key={i} className="flex items-start gap-2 text-slate-700">
+                      <li key={i} className="flex items-start gap-2 text-slate-700 text-xs sm:text-sm">
                         <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                         <span>{req}</span>
                       </li>
@@ -685,7 +716,7 @@ export default function Home() {
                   </h4>
                   <ul className="space-y-1.5">
                     {activeJob.activities.map((ativ, i) => (
-                      <li key={i} className="flex items-start gap-2 text-slate-700">
+                      <li key={i} className="flex items-start gap-2 text-slate-700 text-xs sm:text-sm">
                         <ChevronRight className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
                         <span>{ativ}</span>
                       </li>
@@ -700,11 +731,11 @@ export default function Home() {
                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                     Benefícios Oferecidos
                   </h4>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {activeJob.benefits.map((ben, i) => (
                       <span
                         key={i}
-                        className="px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium"
                       >
                         {ben}
                       </span>
@@ -714,31 +745,31 @@ export default function Home() {
               )}
 
               {/* Application Details */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-2">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">
                   Como se Candidatar
                 </h4>
-                <p className="text-slate-700 text-xs sm:text-sm leading-relaxed mb-4">
+                <p className="text-slate-700 text-xs sm:text-sm leading-relaxed mb-3">
                   {activeJob.application.rawInstructions || 'Envie seu currículo através dos canais abaixo.'}
                 </p>
 
                 {activeJob.application.deadline && (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium mb-3">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium mb-3">
                     <Calendar className="w-3.5 h-3.5" />
                     Prazo limite: {activeJob.application.deadline}
                   </div>
                 )}
 
                 {activeJob.application.email && (
-                  <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white border border-slate-200 text-xs shadow-xs">
-                    <div className="truncate">
+                  <div className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200 text-xs shadow-xs">
+                    <div className="truncate min-w-0">
                       <span className="text-slate-400 block text-[10px]">E-mail para envio:</span>
-                      <span className="font-mono text-emerald-700 font-bold truncate">
+                      <span className="font-mono text-emerald-700 font-bold truncate block">
                         {activeJob.application.email}
                       </span>
                       {activeJob.application.emailSubject && (
                         <span className="text-slate-500 block text-[10px] mt-0.5 truncate">
-                          Assunto exigido: "{activeJob.application.emailSubject}"
+                          Assunto: "{activeJob.application.emailSubject}"
                         </span>
                       )}
                     </div>
@@ -761,20 +792,20 @@ export default function Home() {
               </div>
 
               {/* Original Post Link */}
-              <div className="text-center pt-2">
+              <div className="text-center pt-1 pb-2">
                 <a
                   href={activeJob.originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-slate-400 hover:text-slate-600 inline-flex items-center gap-1"
                 >
-                  Ver publicação original no Themos Vagas <ExternalLink className="w-3 h-3" />
+                  Ver post original no Themos Vagas <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
             </div>
 
-            {/* Modal Bottom Actions */}
-            <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50 flex items-center gap-3">
+            {/* Modal Bottom Actions (Fixed at bottom on Mobile) */}
+            <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
               {activeJob.application.channel === 'email' && activeJob.application.email && (
                 <a
                   href={`mailto:${activeJob.application.email}?subject=${encodeURIComponent(
@@ -782,10 +813,10 @@ export default function Home() {
                   )}&body=${encodeURIComponent(
                     `Olá,\n\nSegue em anexo meu currículo para a vaga de ${activeJob.role}.\n\nAtenciosamente.`
                   )}`}
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all shadow-sm"
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-all shadow-xs"
                 >
-                  <Send className="w-4 h-4" />
-                  Abrir E-mail e Enviar Currículo
+                  <Send className="w-4 h-4 shrink-0" />
+                  <span>Enviar Currículo</span>
                 </a>
               )}
 
@@ -796,10 +827,10 @@ export default function Home() {
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-all shadow-sm"
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-xs sm:text-sm transition-all shadow-xs"
                 >
-                  <MessageCircle className="w-4 h-4" />
-                  Falar no WhatsApp
+                  <MessageCircle className="w-4 h-4 shrink-0" />
+                  <span>Chamar no WhatsApp</span>
                 </a>
               )}
 
@@ -808,16 +839,16 @@ export default function Home() {
                   href={activeJob.application.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-sm transition-all shadow-sm"
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs sm:text-sm transition-all shadow-xs"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  Acessar Formulário da Empresa
+                  <ExternalLink className="w-4 h-4 shrink-0" />
+                  <span>Acessar Inscrição</span>
                 </a>
               )}
 
               <button
                 onClick={(e) => handleShare(activeJob, e)}
-                className="p-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 transition-all border border-slate-200"
+                className="p-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 transition-all border border-slate-200 shrink-0"
                 title="Compartilhar vaga"
               >
                 <Share2 className="w-5 h-5" />
@@ -828,8 +859,8 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-slate-200 py-8 text-center text-xs text-slate-500 bg-white">
-        <p className="mb-2 font-medium text-slate-600">
+      <footer className="mt-12 sm:mt-16 border-t border-slate-200 py-6 sm:py-8 text-center text-xs text-slate-500 bg-white px-4">
+        <p className="mb-1 font-medium text-slate-600">
           Vagas THE & Timon • Automação e sincronização contínua de vagas de emprego e estágio
         </p>
         <p className="text-slate-400">
