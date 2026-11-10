@@ -73,6 +73,7 @@ async function getAllActiveJobs(forceRefresh = false): Promise<JobsResponse> {
     clt: activeJobs.filter((j) => j.jobType === 'CLT').length,
     homeOffice: activeJobs.filter((j) => j.jobType === 'Home Office').length,
     jovemAprendiz: activeJobs.filter((j) => j.jobType === 'Jovem Aprendiz').length,
+    gestaoComercial: activeJobs.filter((j) => j.isGestaoComercial).length,
     expiradasFiltradas: expiredCount,
   };
 

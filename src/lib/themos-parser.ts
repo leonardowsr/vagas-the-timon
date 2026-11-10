@@ -310,6 +310,22 @@ export function parseWordPressPost(post: any): Job | null {
   const jobType = inferJobType(rawTitle, contentHtml);
   const area = inferArea(rawTitle, role, contentHtml);
 
+  // Check if position matches Gestão Comercial profile
+  const roleLower = role.toLowerCase();
+  const contentLower = contentHtml.toLowerCase();
+
+  const isExcludedRole = /\b(laborat[oó]rio|vigilante|qualidade|obra|produ[cç][aã]o|enfermagem|sa[uú]de|farm[aá]cia)\b/i.test(roleLower);
+
+  const isLeadershipCommercial = /\b(supervisor\(?a\)? comercial|coordenador\(?a\)? comercial|gerente comercial|coordenador\(?a\)? de vendas|supervisor\(?a\)? de vendas|gerente de vendas|l[ií]der comercial)\b/i.test(roleLower);
+
+  const isConsultancyCommercial = /\b(consultor\(?a\)? comercial|consultor\(?a\)? de vendas|consultor\(?a\)? de p[oó]s[- ]?vendas?|consultor\(?a\)? de matr[ií]culas?|executiv[oa] de contas|executiv[oa] de credenciamento|inside sales|sdr|bdr)\b/i.test(roleLower);
+
+  const isAnalystCommercial = /\b(analista comercial|assistente comercial|analista de vendas|assistente de vendas|intelig[eê]ncia comercial|planejamento comercial)\b/i.test(roleLower);
+
+  const hasGestaoComercialCourse = /\b(gest[aã]o comercial)\b/i.test(contentLower);
+
+  const isGestaoComercial = !isExcludedRole && (isLeadershipCommercial || isConsultancyCommercial || isAnalystCommercial || hasGestaoComercialCourse);
+
   return {
     id: post.id,
     slug: post.slug,
@@ -345,5 +361,6 @@ export function parseWordPressPost(post: any): Job | null {
     publishedAtFormatted,
     isToday,
     isExpired,
+    isGestaoComercial,
   };
 }

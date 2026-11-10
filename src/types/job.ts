@@ -39,6 +39,7 @@ export interface Job {
   publishedAtFormatted: string;
   isToday: boolean;
   isExpired: boolean;
+  isGestaoComercial: boolean; // Flag para destacar perfil formado em Gestão Comercial
 }
 
 export interface JobsResponse {
@@ -52,6 +53,7 @@ export interface JobsResponse {
     clt: number;
     homeOffice: number;
     jovemAprendiz: number;
+    gestaoComercial: number;
     expiradasFiltradas: number;
   };
   lastUpdated: string;

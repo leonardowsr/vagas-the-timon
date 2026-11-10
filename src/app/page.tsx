@@ -20,6 +20,9 @@ import {
   Share2,
   Timer,
   ShieldCheck,
+  GraduationCap,
+  Award,
+  Sparkle,
 } from 'lucide-react';
 import { Job, JobsResponse } from '@/types/job';
 
@@ -50,10 +53,12 @@ export default function Home() {
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [onlyWithSalary, setOnlyWithSalary] = useState(false);
   const [includeExpired, setIncludeExpired] = useState(false);
+  const [onlyGestaoComercial, setOnlyGestaoComercial] = useState(false);
 
   // Modal state
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copiedCoverLetter, setCopiedCoverLetter] = useState(false);
 
   // Fetch jobs from internal API
   const loadJobs = async (force = false, silent = false) => {
@@ -102,6 +107,7 @@ export default function Home() {
   useEffect(() => {
     if (activeJob) {
       document.body.style.overflow = 'hidden';
+      setCopiedCoverLetter(false);
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -117,6 +123,9 @@ export default function Home() {
     return data.jobs.filter((job) => {
       // Expiration check
       if (!includeExpired && job.isExpired) return false;
+
+      // Gestão Comercial exclusive toggle
+      if (onlyGestaoComercial && !job.isGestaoComercial) return false;
 
       // City check
       if (selectedCity === 'Teresina' && !job.city.includes('Teresina')) return false;
@@ -142,7 +151,7 @@ export default function Home() {
 
       return true;
     });
-  }, [data, selectedCity, selectedType, selectedArea, onlyWithSalary, searchQuery, includeExpired]);
+  }, [data, selectedCity, selectedType, selectedArea, onlyWithSalary, searchQuery, includeExpired, onlyGestaoComercial]);
 
   // Copy email to clipboard
   const handleCopyEmail = (job: Job, e: React.MouseEvent) => {
@@ -152,6 +161,18 @@ export default function Home() {
     navigator.clipboard.writeText(job.application.email);
     setCopiedId(job.id);
     setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  // Generate personalized cover letter for Gestão Comercial
+  const generateGestaoCoverLetter = (job: Job) => {
+    return `Olá, prezada equipe de recrutamento!\n\nMe chamo e sou graduada em Gestão Comercial. Gostaria de manifestar meu forte interesse na oportunidade para ${job.role} em ${job.city}.\n\nPossuo sólida formação em planejamento comercial, gestão de metas, negociação, atendimento a clientes e inteligência de vendas. Tenho total disponibilidade para contribuir com o crescimento da empresa e superar os resultados esperados.\n\nSegue em anexo meu currículo completo para análise. Agradeço desde já pela atenção e fico à disposição para entrevista.\n\nAtenciosamente.`;
+  };
+
+  const handleCopyCoverLetter = (job: Job) => {
+    const text = generateGestaoCoverLetter(job);
+    navigator.clipboard.writeText(text);
+    setCopiedCoverLetter(true);
+    setTimeout(() => setCopiedCoverLetter(false), 3000);
   };
 
   // Share job via WhatsApp
@@ -209,6 +230,64 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Special Banner Gestão Comercial */}
+        <div className="max-w-3xl mx-auto mb-6">
+          <button
+            onClick={() => {
+              setOnlyGestaoComercial(!onlyGestaoComercial);
+              if (!onlyGestaoComercial) {
+                setSelectedArea('all');
+              }
+            }}
+            className={`w-full text-left p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3 shadow-xs active:scale-[0.99] ${
+              onlyGestaoComercial
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-orange-400 ring-4 ring-orange-400/20 shadow-md'
+                : 'bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50/30 text-amber-950 border-amber-200 hover:border-amber-300'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  onlyGestaoComercial ? 'bg-white/20 text-white' : 'bg-amber-500 text-white shadow-sm'
+                }`}
+              >
+                <GraduationCap className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-sm sm:text-base tracking-tight">
+                    Filtro Especial: Perfil Gestão Comercial
+                  </span>
+                  <span
+                    className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full ${
+                      onlyGestaoComercial
+                        ? 'bg-white text-orange-600'
+                        : 'bg-amber-200/80 text-amber-900 border border-amber-300'
+                    }`}
+                  >
+                    {data?.stats.gestaoComercial ?? 0} vagas compatíveis
+                  </span>
+                </div>
+                <p
+                  className={`text-xs mt-0.5 truncate sm:whitespace-normal ${
+                    onlyGestaoComercial ? 'text-orange-100' : 'text-amber-800'
+                  }`}
+                >
+                  Supervisão, Coordenação, Analista, Consultor(a) e Vendas B2B ideais para graduados na área.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                onlyGestaoComercial ? 'bg-white text-orange-700 shadow-sm' : 'bg-amber-600 text-white shadow-xs'
+              }`}
+            >
+              {onlyGestaoComercial ? 'Ativo ✓' : 'Ativar Filtro'}
+            </div>
+          </button>
+        </div>
+
         {/* Hero Section */}
         <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-8">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-100/70 text-emerald-800 border border-emerald-200 mb-3 sm:mb-4">
@@ -348,7 +427,7 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Area Badges (Strict: Comercial & Vendas separada!) */}
+          {/* Area Badges */}
           <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar pb-1">
             {AREAS.map((areaKey) => {
               const isSelected = selectedArea === areaKey;
@@ -357,7 +436,12 @@ export default function Home() {
               return (
                 <button
                   key={areaKey}
-                  onClick={() => setSelectedArea(areaKey)}
+                  onClick={() => {
+                    setSelectedArea(areaKey);
+                    if (onlyGestaoComercial && areaKey !== 'all') {
+                      setOnlyGestaoComercial(false);
+                    }
+                  }}
                   className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap shrink-0 transition-all ${
                     isSelected
                       ? 'bg-emerald-600 text-white font-bold shadow-xs'
@@ -377,9 +461,17 @@ export default function Home() {
         {/* Results Info */}
         <div className="flex items-center justify-between mb-3 sm:mb-4 px-1">
           <p className="text-xs sm:text-sm text-slate-600">
-            Exibindo <span className="text-slate-900 font-bold">{filteredJobs.length}</span> vagas ativas
+            {onlyGestaoComercial ? (
+              <span>
+                Filtro Gestão Comercial: <strong className="text-orange-700">{filteredJobs.length} vagas</strong> recomendadas
+              </span>
+            ) : (
+              <span>
+                Exibindo <span className="text-slate-900 font-bold">{filteredJobs.length}</span> vagas ativas
+              </span>
+            )}
           </p>
-          {(searchQuery || selectedCity !== 'all' || selectedType !== 'all' || selectedArea !== 'all' || onlyWithSalary || includeExpired) && (
+          {(searchQuery || selectedCity !== 'all' || selectedType !== 'all' || selectedArea !== 'all' || onlyWithSalary || includeExpired || onlyGestaoComercial) && (
             <button
               onClick={() => {
                 setSearchQuery('');
@@ -388,6 +480,7 @@ export default function Home() {
                 setSelectedArea('all');
                 setOnlyWithSalary(false);
                 setIncludeExpired(false);
+                setOnlyGestaoComercial(false);
               }}
               className="text-xs font-semibold text-emerald-700 hover:underline"
             >
@@ -433,6 +526,7 @@ export default function Home() {
                 setSelectedType('all');
                 setSelectedArea('all');
                 setOnlyWithSalary(false);
+                setOnlyGestaoComercial(false);
               }}
               className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-all shadow-xs"
             >
@@ -441,7 +535,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Jobs Grid (Responsive: 1 col on mobile, 2 on tablet, 3 on desktop) */}
+        {/* Jobs Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filteredJobs.map((job) => {
             const isEmail = job.application.channel === 'email';
@@ -457,6 +551,8 @@ export default function Home() {
                 className={`group relative bg-white hover:bg-slate-50/80 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md cursor-pointer ${
                   job.isExpired
                     ? 'border-slate-300 opacity-60'
+                    : job.isGestaoComercial
+                    ? 'border-orange-200 hover:border-orange-400 shadow-xs ring-1 ring-orange-500/10'
                     : isEndingSoon
                     ? 'border-amber-300 shadow-xs'
                     : 'border-slate-200 hover:border-emerald-500'
@@ -482,7 +578,12 @@ export default function Home() {
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
-                      {isEndingSoon && !job.isExpired && (
+                      {job.isGestaoComercial && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-300">
+                          <Award className="w-2.5 h-2.5" /> Gestão Comercial
+                        </span>
+                      )}
+                      {isEndingSoon && !job.isExpired && !job.isGestaoComercial && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                           <Clock className="w-2.5 h-2.5" /> Últimos dias
                         </span>
@@ -544,7 +645,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Bottom Action Strip (Responsive for Mobile touch) */}
+                {/* Bottom Action Strip */}
                 <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5">
                   {/* Primary Action Button */}
                   {isEmail && job.application.email && (
@@ -552,7 +653,9 @@ export default function Home() {
                       href={`mailto:${job.application.email}?subject=${encodeURIComponent(
                         job.application.emailSubject || `Vaga - ${job.role}`
                       )}&body=${encodeURIComponent(
-                        `Olá,\n\nSegue em anexo meu currículo para a oportunidade de ${job.role}.\n\nAtenciosamente.`
+                        job.isGestaoComercial
+                          ? generateGestaoCoverLetter(job)
+                          : `Olá,\n\nSegue em anexo meu currículo para a oportunidade de ${job.role}.\n\nAtenciosamente.`
                       )}`}
                       onClick={(e) => e.stopPropagation()}
                       className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-98 min-h-[38px]"
@@ -620,7 +723,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Detail Modal (100% Mobile Friendly: Bottom sheet style on small screens) */}
+      {/* Detail Modal */}
       {activeJob && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
@@ -650,6 +753,11 @@ export default function Home() {
                   <span className="px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-600">
                     {activeJob.area}
                   </span>
+                  {activeJob.isGestaoComercial && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                      <Award className="w-3 h-3" /> Perfil Gestão Comercial
+                    </span>
+                  )}
                   <span className="text-slate-400 text-[11px]">
                     {activeJob.publishedAtFormatted}
                   </span>
@@ -690,6 +798,38 @@ export default function Home() {
                   </span>
                 </div>
               </div>
+
+              {/* Ready Cover Letter Card for Gestão Comercial */}
+              {activeJob.isGestaoComercial && (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50/50 border border-orange-200 shadow-xs">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-bold text-orange-900 flex items-center gap-1.5 uppercase tracking-wider">
+                      <GraduationCap className="w-4 h-4 text-orange-600" />
+                      Carta de Apresentação Pronta (Gestão Comercial)
+                    </span>
+                    <button
+                      onClick={() => handleCopyCoverLetter(activeJob)}
+                      className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all shadow-xs"
+                    >
+                      {copiedCoverLetter ? (
+                        <>
+                          <Check className="w-3 h-3" /> Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" /> Copiar Texto
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed font-sans bg-white/70 p-3 rounded-xl border border-orange-200/60 whitespace-pre-line">
+                    {generateGestaoCoverLetter(activeJob)}
+                  </p>
+                  <p className="text-[10px] text-orange-800/80 mt-1.5">
+                    💡 Dica: Esse texto já vai preenchido automaticamente ao clicar em "Abrir E-mail"!
+                  </p>
+                </div>
+              )}
 
               {/* Requirements */}
               {activeJob.requirements.length > 0 && (
@@ -804,14 +944,16 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Modal Bottom Actions (Fixed at bottom on Mobile) */}
+            {/* Modal Bottom Actions */}
             <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center gap-2">
               {activeJob.application.channel === 'email' && activeJob.application.email && (
                 <a
                   href={`mailto:${activeJob.application.email}?subject=${encodeURIComponent(
                     activeJob.application.emailSubject || `Vaga - ${activeJob.role}`
                   )}&body=${encodeURIComponent(
-                    `Olá,\n\nSegue em anexo meu currículo para a vaga de ${activeJob.role}.\n\nAtenciosamente.`
+                    activeJob.isGestaoComercial
+                      ? generateGestaoCoverLetter(activeJob)
+                      : `Olá,\n\nSegue em anexo meu currículo para a vaga de ${activeJob.role}.\n\nAtenciosamente.`
                   )}`}
                   className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-all shadow-xs"
                 >
@@ -823,7 +965,7 @@ export default function Home() {
               {activeJob.application.channel === 'whatsapp' && activeJob.application.whatsapp && (
                 <a
                   href={`https://wa.me/${activeJob.application.whatsapp}?text=${encodeURIComponent(
-                    activeJob.application.whatsappMessage || `Olá, gostaria de me candidatar à vaga de ${activeJob.role}.`
+                    activeJob.application.whatsappMessage || `Olá, tenho interesse na vaga de ${activeJob.role}.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
