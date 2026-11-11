@@ -23,8 +23,36 @@ import {
   GraduationCap,
   Award,
   Sparkle,
+  Star,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  MessageSquare,
+  Trash2,
+  ChevronDown,
 } from 'lucide-react';
-import { Job, JobsResponse } from '@/types/job';
+import { Job, JobsResponse, ApplicationStage, SavedJobTracking } from '@/types/job';
+
+const STORAGE_KEY = 'vagas_the_timon_favoritos_v1';
+
+const APPLICATION_STAGES: {
+  id: ApplicationStage;
+  label: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  dotColor: string;
+  icon: string;
+  description: string;
+}[] = [
+  { id: 'salva', label: 'Quero Candidatar', badgeBg: 'bg-amber-50', badgeBorder: 'border-amber-300', badgeText: 'text-amber-800', dotColor: 'bg-amber-500', icon: '⭐', description: 'Salva para enviar currículo' },
+  { id: 'enviado', label: 'Currículo Enviado', badgeBg: 'bg-blue-50', badgeBorder: 'border-blue-300', badgeText: 'text-blue-800', dotColor: 'bg-blue-500', icon: '📨', description: 'Candidatura já enviada' },
+  { id: 'teste', label: 'Teste / Case', badgeBg: 'bg-purple-50', badgeBorder: 'border-purple-300', badgeText: 'text-purple-800', dotColor: 'bg-purple-500', icon: '📝', description: 'Fazendo teste técnico ou comportamental' },
+  { id: 'entrevista', label: 'Em Entrevista', badgeBg: 'bg-emerald-50', badgeBorder: 'border-emerald-300', badgeText: 'text-emerald-800', dotColor: 'bg-emerald-500', icon: '🗣️', description: 'Entrevista agendada ou realizada' },
+  { id: 'aguardando', label: 'Aguardando Retorno', badgeBg: 'bg-orange-50', badgeBorder: 'border-orange-300', badgeText: 'text-orange-800', dotColor: 'bg-orange-500', icon: '⏳', description: 'Esperando retorno do RH / Gestor' },
+  { id: 'aprovado', label: 'Aprovada!', badgeBg: 'bg-green-100', badgeBorder: 'border-green-400', badgeText: 'text-green-900', dotColor: 'bg-green-600', icon: '🎉', description: 'Proposta recebida / Selecionada!' },
+  { id: 'encerrado', label: 'Encerrado', badgeBg: 'bg-slate-100', badgeBorder: 'border-slate-300', badgeText: 'text-slate-700', dotColor: 'bg-slate-400', icon: '❌', description: 'Processo encerrado ou não selecionada' },
+];
 
 const AREAS = [
   'all',
@@ -45,6 +73,14 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
+
+  // Main Tab Navigation: Feed or Favoritos
+  const [mainTab, setMainTab] = useState<'feed' | 'favoritos'>('feed');
+
+  // Favorites & Process Tracking state
+  const [savedJobs, setSavedJobs] = useState<Record<number, SavedJobTracking>>({});
+  const [savedStageFilter, setSavedStageFilter] = useState<'all' | ApplicationStage>('all');
+  const [savedSearchQuery, setSavedSearchQuery] = useState('');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -115,6 +151,124 @@ export default function Home() {
       document.body.style.overflow = 'unset';
     };
   }, [activeJob]);
+
+  // Load saved jobs from localStorage on client mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setSavedJobs(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ler favoritos do localStorage:', e);
+    }
+  }, []);
+
+  // Save to localStorage helper
+  const saveToLocalStorage = (newSaved: Record<number, SavedJobTracking>) => {
+    setSavedJobs(newSaved);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSaved));
+    } catch (e) {
+      console.error('Erro ao salvar favoritos no localStorage:', e);
+    }
+  };
+
+  // Toggle favorite / saved state
+  const handleToggleFavorite = (job: Job, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const existing = savedJobs[job.id];
+    if (existing) {
+      const updated = { ...savedJobs };
+      delete updated[job.id];
+      saveToLocalStorage(updated);
+    } else {
+      const updated: Record<number, SavedJobTracking> = {
+        ...savedJobs,
+        [job.id]: {
+          jobId: job.id,
+          stage: 'salva',
+          notes: '',
+          updatedAt: new Date().toISOString(),
+          jobSnapshot: job,
+        },
+      };
+      saveToLocalStorage(updated);
+    }
+  };
+
+  // Update tracking details (stage, notes, dates)
+  const handleUpdateTracking = (
+    jobId: number,
+    updates: Partial<Omit<SavedJobTracking, 'jobId' | 'jobSnapshot'>>,
+    jobFallback?: Job
+  ) => {
+    const current = savedJobs[jobId];
+    const job = current?.jobSnapshot || jobFallback;
+    if (!job) return;
+
+    const updated: Record<number, SavedJobTracking> = {
+      ...savedJobs,
+      [jobId]: {
+        jobId,
+        stage: updates.stage ?? current?.stage ?? 'salva',
+        notes: updates.notes !== undefined ? updates.notes : (current?.notes ?? ''),
+        appliedDate: updates.appliedDate ?? current?.appliedDate,
+        interviewDate: updates.interviewDate ?? current?.interviewDate,
+        updatedAt: new Date().toISOString(),
+        jobSnapshot: job,
+      },
+    };
+    saveToLocalStorage(updated);
+  };
+
+  // Remove from favorites
+  const handleRemoveFavorite = (jobId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated = { ...savedJobs };
+    delete updated[jobId];
+    saveToLocalStorage(updated);
+  };
+
+  // Memoized saved list
+  const savedList = useMemo(() => {
+    return Object.values(savedJobs).sort((a, b) => {
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  }, [savedJobs]);
+
+  // Saved statistics by stage
+  const savedStats = useMemo(() => {
+    return {
+      total: savedList.length,
+      salva: savedList.filter((s) => s.stage === 'salva').length,
+      enviado: savedList.filter((s) => s.stage === 'enviado').length,
+      teste: savedList.filter((s) => s.stage === 'teste').length,
+      entrevista: savedList.filter((s) => s.stage === 'entrevista').length,
+      aguardando: savedList.filter((s) => s.stage === 'aguardando').length,
+      aprovado: savedList.filter((s) => s.stage === 'aprovado').length,
+      encerrado: savedList.filter((s) => s.stage === 'encerrado').length,
+    };
+  }, [savedList]);
+
+  // Filtered saved list
+  const filteredSavedList = useMemo(() => {
+    return savedList.filter((item) => {
+      if (savedStageFilter !== 'all' && item.stage !== savedStageFilter) {
+        return false;
+      }
+      if (savedSearchQuery.trim()) {
+        const q = savedSearchQuery.toLowerCase().trim();
+        const j = item.jobSnapshot;
+        const searchable = `${j.title} ${j.role} ${j.area} ${j.city} ${item.notes || ''}`.toLowerCase();
+        if (!searchable.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [savedList, savedStageFilter, savedSearchQuery]);
 
   // Filtered jobs
   const filteredJobs = useMemo(() => {
@@ -228,9 +382,65 @@ export default function Home() {
         </div>
       </header>
 
+      {/* View Switcher Tabs: Feed vs Minhas Candidaturas */}
+      <div className="bg-white border-b border-slate-200 sticky top-16 z-30 shadow-xs">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto py-1">
+            <button
+              onClick={() => setMainTab('feed')}
+              className={`py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-xs sm:text-sm border-b-2 flex items-center gap-2 transition-all shrink-0 ${
+                mainTab === 'feed'
+                  ? 'border-emerald-600 text-emerald-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              <span>Vagas Disponíveis</span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-700 font-semibold">
+                {data?.total ?? 0}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setMainTab('favoritos')}
+              className={`py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-xs sm:text-sm border-b-2 flex items-center gap-2 transition-all shrink-0 ${
+                mainTab === 'favoritos'
+                  ? 'border-amber-500 text-amber-900 bg-amber-50/50'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Star
+                className={`w-4 h-4 ${
+                  savedList.length > 0 ? 'fill-amber-400 text-amber-500' : 'text-slate-400'
+                }`}
+              />
+              <span>Minhas Candidaturas</span>
+              {savedList.length > 0 ? (
+                <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-500 text-white font-bold animate-in fade-in">
+                  {savedList.length}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-500 font-semibold">
+                  0
+                </span>
+              )}
+            </button>
+          </div>
+
+          {mainTab === 'favoritos' && savedList.length > 0 && (
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 shrink-0">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Salvo no navegador (offline e privado)</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {/* Special Banner Gestão Comercial */}
+        {mainTab === 'feed' && (
+          <>
+            {/* Special Banner Gestão Comercial */}
         <div className="max-w-3xl mx-auto mb-6">
           <button
             onClick={() => {
@@ -593,8 +803,42 @@ export default function Home() {
                           <Sparkles className="w-2.5 h-2.5" /> Hoje
                         </span>
                       )}
+                      <button
+                        onClick={(e) => handleToggleFavorite(job, e)}
+                        title={
+                          savedJobs[job.id]
+                            ? `Salva como "${APPLICATION_STAGES.find((s) => s.id === savedJobs[job.id]?.stage)?.label}". Clique para desfavoritar.`
+                            : 'Salvar vaga e acompanhar processo'
+                        }
+                        className={`p-1.5 rounded-lg border transition-all ${
+                          savedJobs[job.id]
+                            ? 'bg-amber-100 border-amber-300 text-amber-600 hover:bg-amber-200 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-300'
+                        }`}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${savedJobs[job.id] ? 'fill-amber-400 text-amber-500' : ''}`} />
+                      </button>
                     </div>
                   </div>
+
+                  {/* Stage Badge if Saved */}
+                  {savedJobs[job.id] && (() => {
+                    const st = APPLICATION_STAGES.find((s) => s.id === savedJobs[job.id].stage);
+                    if (!st) return null;
+                    return (
+                      <div className="mb-2">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${st.badgeBg} ${st.badgeBorder} ${st.badgeText}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.dotColor}`} />
+                          <span>{st.icon} {st.label}</span>
+                          {savedJobs[job.id].notes && (
+                            <span className="text-[10px] opacity-75 font-normal ml-0.5">• Com anotação</span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Role Title */}
                   <h2 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-2 mb-1.5 leading-snug">
@@ -721,6 +965,330 @@ export default function Home() {
             );
           })}
         </div>
+          </>
+        )}
+
+        {/* View Minhas Candidaturas / Favoritos */}
+        {mainTab === 'favoritos' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Header Minhas Candidaturas */}
+            <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-amber-500/10 border border-amber-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 mb-2">
+                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-600" />
+                    <span>Acompanhamento de Processos Seletivos</span>
+                  </div>
+                  <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                    Minhas Candidaturas
+                  </h2>
+                  <p className="text-slate-600 text-xs sm:text-sm mt-1 max-w-xl">
+                    Acompanhe em que etapa está cada vaga (currículo enviado, testes, entrevistas e respostas) e anote detalhes de cada processo.
+                  </p>
+                </div>
+
+                {savedList.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const summary =
+                          `📋 Minhas Candidaturas em Teresina/Timon:\n\n` +
+                          savedList
+                            .map(
+                              (s, i) =>
+                                `${i + 1}. ${s.jobSnapshot.role} (${s.jobSnapshot.city})\n   • Status: ${
+                                  APPLICATION_STAGES.find((st) => st.id === s.stage)?.label || s.stage
+                                }${s.notes ? `\n   • Nota: ${s.notes}` : ''}`
+                            )
+                            .join('\n\n');
+                        navigator.clipboard.writeText(summary);
+                        alert('Resumo copiado com sucesso! Você pode colar no WhatsApp.');
+                      }}
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200 shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Copiar Resumo</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Pipeline Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-4 pt-4 border-t border-amber-200/60">
+                <div className="bg-white/90 rounded-xl p-2.5 sm:p-3 border border-amber-200/70 text-center shadow-xs">
+                  <span className="block text-xl sm:text-2xl font-black text-slate-900">{savedStats.total}</span>
+                  <span className="text-[11px] text-slate-500 font-medium">Total Salvas</span>
+                </div>
+                <div className="bg-white/90 rounded-xl p-2.5 sm:p-3 border border-blue-200 text-center shadow-xs">
+                  <span className="block text-xl sm:text-2xl font-black text-blue-600">{savedStats.enviado}</span>
+                  <span className="text-[11px] text-blue-700 font-medium">📨 Enviados</span>
+                </div>
+                <div className="bg-white/90 rounded-xl p-2.5 sm:p-3 border border-emerald-200 text-center shadow-xs">
+                  <span className="block text-xl sm:text-2xl font-black text-emerald-600">
+                    {savedStats.entrevista + savedStats.teste}
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-medium">🗣️ Entrevista / Teste</span>
+                </div>
+                <div className="bg-white/90 rounded-xl p-2.5 sm:p-3 border border-green-300 text-center shadow-xs">
+                  <span className="block text-xl sm:text-2xl font-black text-green-700">{savedStats.aprovado}</span>
+                  <span className="text-[11px] text-green-800 font-medium">🎉 Aprovadas!</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage Filter Tabs & Search */}
+            {savedList.length > 0 && (
+              <div className="space-y-3">
+                {/* Search in saved */}
+                <div className="relative max-w-md">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={savedSearchQuery}
+                    onChange={(e) => setSavedSearchQuery(e.target.value)}
+                    placeholder="Buscar em vagas salvas ou anotações..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-white border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 text-xs sm:text-sm text-slate-900 placeholder-slate-400 outline-none shadow-xs"
+                  />
+                  {savedSearchQuery && (
+                    <button
+                      onClick={() => setSavedSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Stage Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  <button
+                    onClick={() => setSavedStageFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl font-semibold shrink-0 transition-all ${
+                      savedStageFilter === 'all'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Todas ({savedStats.total})
+                  </button>
+                  {APPLICATION_STAGES.map((st) => (
+                    <button
+                      key={st.id}
+                      onClick={() => setSavedStageFilter(st.id)}
+                      className={`px-3 py-1.5 rounded-xl font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
+                        savedStageFilter === st.id
+                          ? `${st.badgeBg} ${st.badgeBorder} ${st.badgeText} border-2 font-bold shadow-xs`
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{st.icon}</span>
+                      <span>{st.label}</span>
+                      <span className="opacity-75">({savedStats[st.id] || 0})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty State when no saved jobs */}
+            {savedList.length === 0 && (
+              <div className="py-16 text-center bg-white rounded-2xl border border-slate-200 shadow-xs px-4 max-w-lg mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-4 text-amber-500">
+                  <Star className="w-8 h-8 fill-amber-400" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  Você ainda não favoritou nenhuma vaga
+                </h3>
+                <p className="text-slate-600 text-xs sm:text-sm mb-6 leading-relaxed">
+                  Ao navegar pelo feed de vagas, clique no ícone de estrela ⭐ no cartão da vaga. Assim você pode acompanhar todo o seu progresso (onde já enviou currículo, entrevistas agendadas, testes e retornos)!
+                </p>
+                <button
+                  onClick={() => setMainTab('feed')}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs sm:text-sm hover:bg-emerald-700 transition-all shadow-xs"
+                >
+                  Explorar Vagas Abertas
+                </button>
+              </div>
+            )}
+
+            {/* Empty State when filtered yields 0 */}
+            {savedList.length > 0 && filteredSavedList.length === 0 && (
+              <div className="py-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs px-4">
+                <FileText className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                <h3 className="text-sm font-bold text-slate-800 mb-1">
+                  Nenhuma vaga salva encontrada com esse filtro
+                </h3>
+                <button
+                  onClick={() => {
+                    setSavedStageFilter('all');
+                    setSavedSearchQuery('');
+                  }}
+                  className="mt-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700 underline"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            )}
+
+            {/* Cards Grid for Saved Jobs */}
+            {filteredSavedList.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {filteredSavedList.map((item) => {
+                  const job = item.jobSnapshot;
+                  const currentStage =
+                    APPLICATION_STAGES.find((st) => st.id === item.stage) || APPLICATION_STAGES[0];
+                  const isEmail = job.application.channel === 'email';
+                  const isWhats = job.application.channel === 'whatsapp';
+
+                  return (
+                    <div
+                      key={item.jobId}
+                      className="bg-white border border-slate-200 hover:border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all shadow-xs space-y-3.5"
+                    >
+                      <div>
+                        {/* Top Row: Location, Type and Remove Button */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                                job.city.includes('Timon')
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : 'bg-cyan-50 text-cyan-800 border border-cyan-200'
+                              }`}
+                            >
+                              <MapPin className="w-3 h-3" />
+                              {job.city} – {job.state}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700">
+                              {job.jobType}
+                            </span>
+                            {job.isGestaoComercial && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                                <Award className="w-2.5 h-2.5" /> Gestão Comercial
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={(e) => handleRemoveFavorite(item.jobId, e)}
+                            title="Remover vaga das salvas"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Title */}
+                        <h3
+                          onClick={() => setActiveJob(job)}
+                          className="font-bold text-base text-slate-900 hover:text-emerald-700 cursor-pointer transition-colors leading-snug mb-1 line-clamp-2"
+                        >
+                          {job.role}
+                        </h3>
+
+                        <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
+                          <span className="truncate">{job.area}</span>
+                          <span className="font-bold text-emerald-700 shrink-0">{job.salary}</span>
+                        </div>
+
+                        {/* Stage Selector Dropdown */}
+                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 mb-3">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                            Etapa do Processo:
+                          </label>
+                          <select
+                            value={item.stage}
+                            onChange={(e) =>
+                              handleUpdateTracking(
+                                item.jobId,
+                                { stage: e.target.value as ApplicationStage },
+                                job
+                              )
+                            }
+                            className={`w-full text-xs font-bold py-1.5 px-2 rounded-lg border outline-none transition-all cursor-pointer ${currentStage.badgeBg} ${currentStage.badgeBorder} ${currentStage.badgeText}`}
+                          >
+                            {APPLICATION_STAGES.map((st) => (
+                              <option key={st.id} value={st.id}>
+                                {st.icon} {st.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Notes Area */}
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
+                            <span>Anotações / Próximos Passos:</span>
+                            <span className="text-[9px] font-normal text-slate-400">Salva automático</span>
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={item.notes || ''}
+                            onChange={(e) =>
+                              handleUpdateTracking(item.jobId, { notes: e.target.value }, job)
+                            }
+                            placeholder="Ex: Entrevista quinta 14h com Juliana do RH por chamada de vídeo..."
+                            className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Card Bottom Actions */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5">
+                        {isEmail && job.application.email && (
+                          <a
+                            href={`mailto:${job.application.email}?subject=${encodeURIComponent(
+                              job.application.emailSubject || `Vaga - ${job.role}`
+                            )}&body=${encodeURIComponent(
+                              job.isGestaoComercial
+                                ? generateGestaoCoverLetter(job)
+                                : `Olá,\n\nSegue em anexo meu currículo para a oportunidade de ${job.role}.\n\nAtenciosamente.`
+                            )}`}
+                            onClick={() => {
+                              if (item.stage === 'salva') {
+                                handleUpdateTracking(item.jobId, { stage: 'enviado' }, job);
+                              }
+                            }}
+                            className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>{item.stage === 'enviado' ? 'Reenviar E-mail' : 'Enviar Currículo'}</span>
+                          </a>
+                        )}
+
+                        {isWhats && job.application.whatsapp && (
+                          <a
+                            href={`https://wa.me/${job.application.whatsapp}?text=${encodeURIComponent(
+                              job.application.whatsappMessage || `Olá, tenho interesse na vaga de ${job.role}.`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => {
+                              if (item.stage === 'salva') {
+                                handleUpdateTracking(item.jobId, { stage: 'enviado' }, job);
+                              }
+                            }}
+                            className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-xs font-bold bg-green-600 hover:bg-green-700 text-white transition-all shadow-xs"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </a>
+                        )}
+
+                        <button
+                          onClick={() => setActiveJob(job)}
+                          className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200"
+                        >
+                          Ver Detalhes
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Detail Modal */}
@@ -767,16 +1335,95 @@ export default function Home() {
                 </h3>
               </div>
 
-              <button
-                onClick={() => setActiveJob(null)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-all shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => handleToggleFavorite(activeJob)}
+                  className={`p-2 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-semibold ${
+                    savedJobs[activeJob.id]
+                      ? 'bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200'
+                      : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-amber-600'
+                  }`}
+                >
+                  <Star className={`w-4 h-4 ${savedJobs[activeJob.id] ? 'fill-amber-400 text-amber-500' : ''}`} />
+                  <span className="hidden sm:inline">
+                    {savedJobs[activeJob.id] ? 'Favoritada' : 'Favoritar'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setActiveJob(null)}
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-all shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 text-sm">
+              {/* Tracking & Notes Panel in Modal */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-600 fill-amber-400" />
+                    <span className="font-bold text-xs sm:text-sm text-slate-900">
+                      Acompanhamento do Processo Seletivo
+                    </span>
+                  </div>
+                  {savedJobs[activeJob.id] ? (
+                    <button
+                      onClick={() => handleRemoveFavorite(activeJob.id)}
+                      className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Remover dos favoritos
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-slate-500">
+                      Clique em uma etapa para salvar
+                    </span>
+                  )}
+                </div>
+
+                {/* Stage selector buttons */}
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-600 block mb-1.5">
+                    Etapa da candidatura:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {APPLICATION_STAGES.map((st) => {
+                      const isCurrent = savedJobs[activeJob.id]?.stage === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          onClick={() => handleUpdateTracking(activeJob.id, { stage: st.id }, activeJob)}
+                          className={`p-2 rounded-xl text-xs font-semibold border text-left transition-all flex items-center gap-1.5 ${
+                            isCurrent
+                              ? `${st.badgeBg} ${st.badgeBorder} ${st.badgeText} ring-2 ring-amber-400/40 font-bold shadow-xs`
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          <span>{st.icon}</span>
+                          <span className="truncate">{st.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Notes textarea */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                    Anotações do processo (ex: entrevista agendada, contato da recrutadora, pretensão informada):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={savedJobs[activeJob.id]?.notes || ''}
+                    onChange={(e) => handleUpdateTracking(activeJob.id, { notes: e.target.value }, activeJob)}
+                    placeholder="Escreva aqui anotações pessoais sobre essa vaga..."
+                    className="w-full p-2.5 rounded-xl bg-white border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all resize-none"
+                  />
+                </div>
+              </div>
+
               {/* Highlights Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">

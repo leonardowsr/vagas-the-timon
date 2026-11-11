@@ -58,3 +58,22 @@ export interface JobsResponse {
   };
   lastUpdated: string;
 }
+
+export type ApplicationStage =
+  | 'salva'           // Quero me candidatar
+  | 'enviado'         // Currículo enviado
+  | 'teste'           // Teste / Case prático
+  | 'entrevista'      // Em entrevista
+  | 'aguardando'      // Aguardando retorno / feedback
+  | 'aprovado'        // Aprovada / Proposta!
+  | 'encerrado';      // Não selecionada / Encerrado
+
+export interface SavedJobTracking {
+  jobId: number;
+  stage: ApplicationStage;
+  notes: string;
+  appliedDate?: string;
+  interviewDate?: string;
+  updatedAt: string;
+  jobSnapshot: Job;
+}
