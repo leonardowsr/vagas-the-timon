@@ -6,10 +6,10 @@ import { Job, JobsResponse } from '@/types/job';
 let cachedResponse: { timestamp: number; data: JobsResponse } | null = null;
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
-async function fetchPage(page: number): Promise<any[]> {
+async function fetchPage(page: number, afterIso: string): Promise<any[]> {
   try {
     const res = await fetch(
-      `https://themosvagas.com.br/wp-json/wp/v2/posts?per_page=50&page=${page}&_fields=id,date,slug,link,title,content`,
+      `https://themosvagas.com.br/wp-json/wp/v2/posts?per_page=100&page=${page}&after=${afterIso}&_fields=id,date,slug,link,title,content`,
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (VagasTHE/2.0; Automacao Teresina-Timon)',
@@ -35,29 +35,30 @@ async function getAllActiveJobs(forceRefresh = false): Promise<JobsResponse> {
     return cachedResponse.data;
   }
 
-  // Fetch first 6 pages (up to 300 latest posts) concurrently
-  const [page1, page2, page3, page4, page5, page6] = await Promise.all([
-    fetchPage(1),
-    fetchPage(2),
-    fetchPage(3),
-    fetchPage(4),
-    fetchPage(5),
-    fetchPage(6),
-  ]);
+  // Calculate 10 days ago ISO date string
+  const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000);
+  const afterIso = `${tenDaysAgo.toISOString().split('T')[0]}T00:00:00`;
 
-  const rawPosts = [
-    ...(Array.isArray(page1) ? page1 : []),
-    ...(Array.isArray(page2) ? page2 : []),
-    ...(Array.isArray(page3) ? page3 : []),
-    ...(Array.isArray(page4) ? page4 : []),
-    ...(Array.isArray(page5) ? page5 : []),
-    ...(Array.isArray(page6) ? page6 : []),
-  ];
+  // Fetch up to 8 pages (covers up to 800 posts in the 10-day window) concurrently
+  const pages = [1, 2, 3, 4, 5, 6, 7, 8];
+  const pagesData = await Promise.all(pages.map((p) => fetchPage(p, afterIso)));
+
+  const rawPosts = pagesData.flat();
+
+  // Deduplicate posts by ID in case of overlap
+  const seenIds = new Set<number>();
+  const uniquePosts: any[] = [];
+  for (const post of rawPosts) {
+    if (post && post.id && !seenIds.has(post.id)) {
+      seenIds.add(post.id);
+      uniquePosts.push(post);
+    }
+  }
 
   const allJobs: Job[] = [];
   let expiredCount = 0;
 
-  for (const post of rawPosts) {
+  for (const post of uniquePosts) {
     const parsed = parseWordPressPost(post);
     if (parsed) {
       if (parsed.isExpired) {

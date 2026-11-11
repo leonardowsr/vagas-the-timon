@@ -277,27 +277,38 @@ export function parseWordPressPost(post: any): Job | null {
     deadline = deadlineMatchNumeric[1].replace(/\s+/g, '');
     const parts = deadline.split(/[/.-]/);
     if (parts.length >= 2) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1; // 0-indexed
-      let year = dateObj.getFullYear();
-      if (parts.length === 3) {
-        let y = parseInt(parts[2], 10);
-        if (y < 100) y += 2000;
-        year = y;
-      }
-      const deadlineObj = new Date(year, month, day, 23, 59, 59, 999);
-      deadlineDateIso = deadlineObj.toISOString();
-
-      // Check if deadline has strictly passed
-      if (deadlineObj.getTime() < now.getTime()) {
-        isExpired = true;
-        jobStatus = 'expirada';
-      } else {
-        const msPerDay = 1000 * 60 * 60 * 24;
-        daysRemaining = Math.max(0, Math.ceil((deadlineObj.getTime() - now.getTime()) / msPerDay));
-        if (daysRemaining <= 2) {
-          jobStatus = 'ultimos_dias';
+      try {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // 0-indexed
+        let year = dateObj.getFullYear();
+        if (parts.length === 3) {
+          let y = parseInt(parts[2], 10);
+          if (y < 100) y += 2000;
+          year = y;
         }
+
+        if (day >= 1 && day <= 31 && month >= 0 && month <= 11) {
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          // Use UTC-3 (Teresina / Brazil time) so 23:59:59 lasts until midnight local time
+          const deadlineObj = new Date(`${year}-${pad(month + 1)}-${pad(day)}T23:59:59.999-03:00`);
+          if (!isNaN(deadlineObj.getTime())) {
+            deadlineDateIso = deadlineObj.toISOString();
+
+            // Check if deadline has strictly passed
+            if (deadlineObj.getTime() < now.getTime()) {
+              isExpired = true;
+              jobStatus = 'expirada';
+            } else {
+              const msPerDay = 1000 * 60 * 60 * 24;
+              daysRemaining = Math.max(0, Math.ceil((deadlineObj.getTime() - now.getTime()) / msPerDay));
+              if (daysRemaining <= 2) {
+                jobStatus = 'ultimos_dias';
+              }
+            }
+          }
+        }
+      } catch {
+        // Fallback gracefully
       }
     }
   } else if (deadlineMatchTextual) {
@@ -306,8 +317,10 @@ export function parseWordPressPost(post: any): Job | null {
     if (MONTHS_MAP[monthName] !== undefined) {
       const month = MONTHS_MAP[monthName];
       const year = dateObj.getFullYear();
-      const deadlineObj = new Date(year, month, day, 23, 59, 59, 999);
-      deadline = `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      // Use UTC-3 (Teresina / Brazil time)
+      const deadlineObj = new Date(`${year}-${pad(month + 1)}-${pad(day)}T23:59:59.999-03:00`);
+      deadline = `${pad(day)}/${pad(month + 1)}/${year}`;
       deadlineDateIso = deadlineObj.toISOString();
 
       if (deadlineObj.getTime() < now.getTime()) {
