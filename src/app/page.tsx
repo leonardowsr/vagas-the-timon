@@ -67,6 +67,31 @@ const AREAS = [
   'Educação',
 ];
 
+// Helper to extract target vacancy ID from URL hash (#vaga-123 or #123) or query params (?vaga=123 or ?id=123)
+function getTargetJobIdFromUrl(): number | null {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Check query parameters: ?vaga=123 or ?id=123 or ?vagaId=123
+  const params = new URLSearchParams(window.location.search);
+  const qVaga = params.get('vaga') || params.get('id') || params.get('vagaId');
+  if (qVaga) {
+    const num = parseInt(qVaga, 10);
+    if (!isNaN(num) && num > 0) return num;
+  }
+
+  // 2. Check hash: #vaga-123 or #123
+  const hash = window.location.hash;
+  if (hash) {
+    const match = hash.match(/#?(?:vaga-)?(\d+)/i);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+
+  return null;
+}
+
 export default function Home() {
   const [data, setData] = useState<JobsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +121,10 @@ export default function Home() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [copiedCoverLetter, setCopiedCoverLetter] = useState(false);
 
+  // Highlighted vacancy from deep link
+  const [highlightedJobId, setHighlightedJobId] = useState<number | null>(null);
+  const [sharedJobAlert, setSharedJobAlert] = useState<Job | null>(null);
+
   // Fetch jobs from internal API
   const loadJobs = async (force = false, silent = false) => {
     try {
@@ -108,6 +137,12 @@ export default function Home() {
       const params = new URLSearchParams();
       if (force) params.append('refresh', '1');
       if (includeExpired) params.append('includeExpired', 'true');
+
+      // Check if URL targets a specific vacancy (via query or hash)
+      const targetId = getTargetJobIdFromUrl();
+      if (targetId) {
+        params.append('vagaId', targetId.toString());
+      }
 
       const url = `/api/vagas?${params.toString()}`;
       const res = await fetch(url);
@@ -130,6 +165,77 @@ export default function Home() {
   useEffect(() => {
     loadJobs();
   }, [includeExpired]);
+
+  // Handle shared job link / deep linking on data load
+  useEffect(() => {
+    if (!data?.jobs || data.jobs.length === 0) return;
+
+    const targetId = getTargetJobIdFromUrl();
+    if (!targetId) return;
+
+    const targetJob = data.jobs.find((j) => j.id === targetId);
+    if (targetJob) {
+      setHighlightedJobId(targetId);
+      setSharedJobAlert(targetJob);
+      setMainTab('feed');
+
+      // Clear any conflicting filter so the shared job is always visible
+      if (selectedCity !== 'all' && !targetJob.city.includes(selectedCity)) {
+        setSelectedCity('all');
+      }
+      if (selectedType !== 'all' && targetJob.jobType !== selectedType) {
+        setSelectedType('all');
+      }
+      if (selectedArea !== 'all' && targetJob.area !== selectedArea) {
+        setSelectedArea('all');
+      }
+      if (onlyGestaoComercial && !targetJob.isGestaoComercial) {
+        setOnlyGestaoComercial(false);
+      }
+      if (onlyWithSalary && !targetJob.hasSalaryInfo) {
+        setOnlyWithSalary(false);
+      }
+
+      // Automatically open detail modal
+      setActiveJob(targetJob);
+
+      // Smooth scroll to card in grid
+      setTimeout(() => {
+        const el = document.getElementById(`vaga-${targetId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    }
+  }, [data]);
+
+  // Listen to hash / url changes while user is on the page
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const targetId = getTargetJobIdFromUrl();
+      if (!targetId || !data?.jobs) return;
+      const targetJob = data.jobs.find((j) => j.id === targetId);
+      if (targetJob) {
+        setHighlightedJobId(targetId);
+        setSharedJobAlert(targetJob);
+        setMainTab('feed');
+        setActiveJob(targetJob);
+        setTimeout(() => {
+          const el = document.getElementById(`vaga-${targetId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+      }
+    };
+
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, [data]);
 
   // Background Auto-Sync every 60 seconds
   useEffect(() => {
@@ -275,6 +381,9 @@ export default function Home() {
     if (!data?.jobs) return [];
 
     return data.jobs.filter((job) => {
+      // If this specific vacancy is highlighted from a shared link, always keep it visible
+      if (highlightedJobId && job.id === highlightedJobId) return true;
+
       // Expiration check
       if (!includeExpired && job.isExpired) return false;
 
@@ -305,7 +414,7 @@ export default function Home() {
 
       return true;
     });
-  }, [data, selectedCity, selectedType, selectedArea, onlyWithSalary, searchQuery, includeExpired, onlyGestaoComercial]);
+  }, [data, selectedCity, selectedType, selectedArea, onlyWithSalary, searchQuery, includeExpired, onlyGestaoComercial, highlightedJobId]);
 
   // Copy email to clipboard
   const handleCopyEmail = (job: Job, e: React.MouseEvent) => {
@@ -332,7 +441,7 @@ export default function Home() {
   // Share job via WhatsApp
   const handleShare = (job: Job, e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = `Olha essa vaga de *${job.role}* em *${job.city}*:\nSalário: ${job.salary}\nConfira e candidate-se: https://vagas-the-timon.vercel.app/#vaga-${job.id}`;
+    const text = `Olha essa vaga de *${job.role}* em *${job.city}*:\nSalário: ${job.salary}\nConfira e candidate-se: https://vagas-the-timon.vercel.app/?vaga=${job.id}#vaga-${job.id}`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank');
   };
@@ -440,6 +549,55 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
         {mainTab === 'feed' && (
           <>
+            {/* Banner Vaga Compartilhada / Link Direto */}
+            {sharedJobAlert && (
+              <div className="max-w-3xl mx-auto mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ring-2 ring-emerald-400">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                    <Sparkles className="w-5 h-5 text-emerald-100" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+                      Vaga compartilhada selecionada
+                    </span>
+                    <h3 className="font-bold text-sm sm:text-base truncate">
+                      {sharedJobAlert.role} • {sharedJobAlert.city} – {sharedJobAlert.state}
+                    </h3>
+                    <p className="text-xs text-emerald-100/90 truncate">
+                      Salário: {sharedJobAlert.salary} • {sharedJobAlert.jobType} • {sharedJobAlert.area}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      setActiveJob(sharedJobAlert);
+                      setTimeout(() => {
+                        document.getElementById(`vaga-${sharedJobAlert.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 200);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-bold hover:bg-emerald-50 transition-all shadow-xs active:scale-95"
+                  >
+                    Abrir Detalhes
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHighlightedJobId(null);
+                      setSharedJobAlert(null);
+                      if (typeof window !== 'undefined') {
+                        window.history.replaceState(null, '', window.location.pathname);
+                      }
+                    }}
+                    className="p-1.5 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition-all"
+                    title="Remover destaque"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Special Banner Gestão Comercial */}
         <div className="max-w-3xl mx-auto mb-6">
           <button
@@ -758,8 +916,10 @@ export default function Home() {
                 key={job.id}
                 id={`vaga-${job.id}`}
                 onClick={() => setActiveJob(job)}
-                className={`group relative bg-white hover:bg-slate-50/80 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md cursor-pointer ${
-                  job.isExpired
+                className={`group relative bg-white hover:bg-slate-50/80 border rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-300 hover:shadow-md cursor-pointer ${
+                  highlightedJobId === job.id
+                    ? 'ring-4 ring-emerald-500 border-emerald-500 shadow-xl bg-emerald-50/30'
+                    : job.isExpired
                     ? 'border-slate-300 opacity-60'
                     : job.isGestaoComercial
                     ? 'border-orange-200 hover:border-orange-400 shadow-xs ring-1 ring-orange-500/10'
@@ -785,6 +945,11 @@ export default function Home() {
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
                         {job.jobType}
                       </span>
+                      {highlightedJobId === job.id && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs animate-pulse">
+                          🎯 Vaga do Link
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">

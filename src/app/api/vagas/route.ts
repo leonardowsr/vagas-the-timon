@@ -109,13 +109,40 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || '';
     const area = searchParams.get('area') || '';
     const hasSalary = searchParams.get('hasSalary') === 'true';
+    const singleIdParam = searchParams.get('vagaId') || searchParams.get('vaga') || searchParams.get('id');
+    const singleId = singleIdParam ? parseInt(singleIdParam, 10) : null;
 
     const fullData = await getAllActiveJobs(forceRefresh);
+
+    // If a specific vacancy was requested and is not in the cached 10-day lookback, fetch it directly
+    if (singleId && !isNaN(singleId)) {
+      const existing = fullData.jobs.find((j) => j.id === singleId);
+      if (!existing) {
+        try {
+          const singleRes = await fetch(`https://themosvagas.com.br/wp-json/wp/v2/posts/${singleId}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (VagasTHE/2.0; Automacao Teresina-Timon)',
+              'Accept': 'application/json',
+            },
+            cache: 'no-store',
+          });
+          if (singleRes.ok) {
+            const rawSingle = await singleRes.json();
+            const parsed = parseWordPressPost(rawSingle);
+            if (parsed) {
+              fullData.jobs.unshift(parsed);
+            }
+          }
+        } catch (err) {
+          console.error(`Error fetching single job ${singleId}:`, err);
+        }
+      }
+    }
 
     // By default, strictly filter out expired jobs so the user only sees valid positions
     let filteredJobs = includeExpired
       ? fullData.jobs
-      : fullData.jobs.filter((j) => !j.isExpired);
+      : fullData.jobs.filter((j) => !j.isExpired || (singleId && j.id === singleId));
 
     if (city && city !== 'all') {
       filteredJobs = filteredJobs.filter((job) => job.city.toLowerCase().includes(city.toLowerCase()));
